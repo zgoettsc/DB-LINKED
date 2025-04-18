@@ -1304,17 +1304,16 @@ struct ContentView: View {
         treatmentTimerId = notificationId
         appData.treatmentTimerId = notificationId
         
-        // Set the countdown value directly (don't rely on appData.startTreatmentTimer)
+        // Set the countdown value directly
         treatmentCountdown = duration
         
-        // Only start the actual timer in AppData if notifications are enabled
-        // This avoids the flickering issue with the timer display
+        // Start the actual timer in AppData for all users
+        appData.startTreatmentTimer(duration: duration)
+        print("Starting timer, endDate: \(endDate), id: \(notificationId), duration: \(duration)")
+        
+        // Only schedule notifications if enabled
         if appData.currentUser?.treatmentFoodTimerEnabled ?? false {
-            appData.startTreatmentTimer(duration: duration)
-            print("Starting timer with notifications, endDate: \(endDate), id: \(notificationId), duration: \(duration)")
             scheduleNotification(duration: duration)
-        } else {
-            print("Starting timer without notifications, endDate: \(endDate), id: \(notificationId), duration: \(duration)")
         }
     }
 
@@ -1388,19 +1387,14 @@ struct ContentView: View {
     }
 
     func updateTreatmentCountdown() {
-        // If notifications are enabled, use the timer from AppData
-        if appData.currentUser?.treatmentFoodTimerEnabled ?? false {
-            treatmentCountdown = appData.checkTimerStatus()
-            
-            // If timer just expired, show alert
-            if let remaining = treatmentCountdown, remaining <= 1 && !showingTimerAlert && !isCategoryComplete(.treatment) {
-                print("Timer expired, triggering alert")
-                AudioPlayer.playAlarmSound()
-                showingTimerAlert = true
-            }
-        } else if let countdown = treatmentCountdown {
-            // If notifications are disabled but we have a countdown, decrement it manually
-            treatmentCountdown = max(0, countdown - 1)
+        // Remove this condition to run timer for all users, not just those with notifications enabled
+        treatmentCountdown = appData.checkTimerStatus()
+        
+        // If timer just expired, show alert
+        if let remaining = treatmentCountdown, remaining <= 1 && !showingTimerAlert && !isCategoryComplete(.treatment) {
+            print("Timer expired, triggering alert")
+            AudioPlayer.playAlarmSound()
+            showingTimerAlert = true
         }
         
         // Check if we need to stop/clear the timer when all items are logged
