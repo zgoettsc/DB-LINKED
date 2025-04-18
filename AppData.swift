@@ -148,8 +148,6 @@ class AppData: ObservableObject {
     
     // Function to start a new treatment timer
     func startTreatmentTimer(duration: TimeInterval = 900) {
-        guard currentUser?.treatmentFoodTimerEnabled ?? false else { return }
-        
         // Cancel any existing timer
         stopTreatmentTimer()
         
@@ -161,8 +159,10 @@ class AppData: ObservableObject {
         // Get unlogged treatment items
         let unloggedItems = getUnloggedTreatmentItems()
         
-        // Schedule notifications
-        let notificationIds = scheduleNotifications(timerId: timerId, endTime: endTime, duration: duration)
+        // Only schedule notifications if enabled
+        let notificationIds = currentUser?.treatmentFoodTimerEnabled ?? false ?
+            scheduleNotifications(timerId: timerId, endTime: endTime, duration: duration) :
+            []
         
         // Create and save the timer
         let newTimer = TreatmentTimer(
