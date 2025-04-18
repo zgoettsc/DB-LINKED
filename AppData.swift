@@ -173,6 +173,11 @@ class AppData: ObservableObject {
         )
         
         self.treatmentTimer = newTimer
+        
+        // Save to Firebase
+        if let dbRef = dbRef {
+            dbRef.child("treatmentTimer").setValue(newTimer.toDictionary())
+        }
     }
 
     // Get unlogged treatment items
@@ -193,6 +198,11 @@ class AppData: ObservableObject {
         // Cancel notifications
         if let timer = treatmentTimer, let notificationIds = timer.notificationIds {
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: notificationIds)
+        }
+        
+        // Clear Firebase entry
+        if let dbRef = dbRef {
+            dbRef.child("treatmentTimer").removeValue()
         }
         
         // Set to nil to trigger didSet and save
@@ -224,6 +234,11 @@ class AppData: ObservableObject {
         )
         
         self.treatmentTimer = newTimer
+        
+        // Save to Firebase
+        if let dbRef = dbRef {
+            dbRef.child("treatmentTimer").setValue(newTimer.toDictionary())
+        }
     }
 
     // Schedule multiple notifications and return their IDs
