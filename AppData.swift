@@ -156,6 +156,7 @@ class AppData: ObservableObject {
         // Create a new timer
         let endTime = Date().addingTimeInterval(duration)
         let timerId = UUID().uuidString
+        treatmentTimerId = timerId
         
         // Get unlogged treatment items
         let unloggedItems = getUnloggedTreatmentItems()
@@ -174,37 +175,43 @@ class AppData: ObservableObject {
         
         self.treatmentTimer = newTimer
         
-        // Save to Firebase - ensure we're saving at the correct path with error handling
+        // Save to Firebase - corrected path
         if let roomId = currentRoomId {
             let dbRef = Database.database().reference()
-            let timerPath = "rooms/\(roomId)/treatmentTimer"
+            print("Saving timer to path: rooms/\(roomId)/treatmentTimer")
+            logToFile("Saving timer to path: rooms/\(roomId)/treatmentTimer")
             
-            dbRef.child(timerPath).setValue(newTimer.toDictionary()) { error, _ in
+            // Convert timer to dictionary
+            let timerData = newTimer.toDictionary()
+            print("Timer data to save: \(timerData)")
+            logToFile("Timer data to save: \(timerData)")
+            
+            // Save directly to the rooms node
+            dbRef.child("rooms").child(roomId).child("treatmentTimer").setValue(timerData) { error, _ in
                 if let error = error {
                     print("ERROR: Failed to save treatment timer to Firebase: \(error.localizedDescription)")
                     self.logToFile("ERROR: Failed to save treatment timer to Firebase: \(error.localizedDescription)")
                 } else {
-                    print("Successfully saved treatment timer to Firebase at path: \(timerPath)")
-                    self.logToFile("Successfully saved treatment timer to Firebase at path: \(timerPath)")
+                    print("Successfully saved treatment timer to Firebase")
+                    self.logToFile("Successfully saved treatment timer to Firebase")
                     
-                    // Verify data was actually written
-                    dbRef.child(timerPath).observeSingleEvent(of: .value) { verifySnapshot in
-                        if let timerDict = verifySnapshot.value as? [String: Any] {
-                            print("Verified timer data in Firebase: \(timerDict)")
-                            self.logToFile("Verified timer data in Firebase: \(timerDict)")
+                    // Verify the data was written
+                    dbRef.child("rooms").child(roomId).child("treatmentTimer").observeSingleEvent(of: .value) { snapshot in
+                        if snapshot.exists() {
+                            print("Verified timer data exists in Firebase: \(snapshot.value ?? "nil")")
+                            self.logToFile("Verified timer data exists in Firebase: \(snapshot.value ?? "nil")")
                         } else {
-                            print("WARNING: Could not verify timer data in Firebase")
-                            self.logToFile("WARNING: Could not verify timer data in Firebase")
+                            print("WARNING: Timer data was not found in Firebase after save")
+                            self.logToFile("WARNING: Timer data was not found in Firebase after save")
                         }
                     }
                 }
             }
         } else {
-            print("WARNING: No room ID available, treatment timer not saved to Firebase")
-            self.logToFile("WARNING: No room ID available, treatment timer not saved to Firebase")
+            print("WARNING: No roomId available, timer not saved to Firebase")
+            logToFile("WARNING: No roomId available, timer not saved to Firebase")
         }
     }
-
     // Get unlogged treatment items
     private func getUnloggedTreatmentItems() -> [Item] {
         guard let cycleId = currentCycleId() else { return [] }
@@ -225,10 +232,10 @@ class AppData: ObservableObject {
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: notificationIds)
         }
         
-        // Clear Firebase entry
+        // Clear Firebase entry - corrected path
         if let roomId = currentRoomId {
             let dbRef = Database.database().reference()
-            dbRef.child("rooms/\(roomId)/treatmentTimer").removeValue { error, _ in
+            dbRef.child("rooms").child(roomId).child("treatmentTimer").removeValue { error, _ in
                 if let error = error {
                     print("ERROR: Failed to remove treatment timer from Firebase: \(error.localizedDescription)")
                     self.logToFile("ERROR: Failed to remove treatment timer from Firebase: \(error.localizedDescription)")
@@ -241,6 +248,7 @@ class AppData: ObservableObject {
         
         // Set to nil to trigger didSet and save
         treatmentTimer = nil
+        treatmentTimerId = nil
     }
 
     // Function to snooze the treatment timer
@@ -859,6 +867,7 @@ class AppData: ObservableObject {
                 if timerObj.isActive && timerObj.endTime > Date() {
                     DispatchQueue.main.async {
                         self.treatmentTimer = timerObj
+                        self.treatmentTimerId = timerObj.id
                         print("Updated local timer from Firebase")
                         self.logToFile("Updated local timer from Firebase")
                     }
@@ -866,6 +875,7 @@ class AppData: ObservableObject {
                     // Timer is inactive or expired, clear it
                     DispatchQueue.main.async {
                         self.treatmentTimer = nil
+                        self.treatmentTimerId = nil
                         print("Cleared local timer (inactive or expired)")
                         self.logToFile("Cleared local timer (inactive or expired)")
                     }
@@ -875,6 +885,7 @@ class AppData: ObservableObject {
                 DispatchQueue.main.async {
                     if self.treatmentTimer != nil {
                         self.treatmentTimer = nil
+                        self.treatmentTimerId = nil
                         print("Cleared local timer (no timer in Firebase)")
                         self.logToFile("Cleared local timer (no timer in Firebase)")
                     }
