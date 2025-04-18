@@ -174,9 +174,34 @@ class AppData: ObservableObject {
         
         self.treatmentTimer = newTimer
         
-        // Save to Firebase
-        if let dbRef = dbRef {
-            dbRef.child("treatmentTimer").setValue(newTimer.toDictionary())
+        // Save to Firebase - ensure we're saving at the correct path with error handling
+        if let roomId = currentRoomId {
+            let dbRef = Database.database().reference()
+            let timerPath = "rooms/\(roomId)/treatmentTimer"
+            
+            dbRef.child(timerPath).setValue(newTimer.toDictionary()) { error, _ in
+                if let error = error {
+                    print("ERROR: Failed to save treatment timer to Firebase: \(error.localizedDescription)")
+                    self.logToFile("ERROR: Failed to save treatment timer to Firebase: \(error.localizedDescription)")
+                } else {
+                    print("Successfully saved treatment timer to Firebase at path: \(timerPath)")
+                    self.logToFile("Successfully saved treatment timer to Firebase at path: \(timerPath)")
+                    
+                    // Verify data was actually written
+                    dbRef.child(timerPath).observeSingleEvent(of: .value) { verifySnapshot in
+                        if let timerDict = verifySnapshot.value as? [String: Any] {
+                            print("Verified timer data in Firebase: \(timerDict)")
+                            self.logToFile("Verified timer data in Firebase: \(timerDict)")
+                        } else {
+                            print("WARNING: Could not verify timer data in Firebase")
+                            self.logToFile("WARNING: Could not verify timer data in Firebase")
+                        }
+                    }
+                }
+            }
+        } else {
+            print("WARNING: No room ID available, treatment timer not saved to Firebase")
+            self.logToFile("WARNING: No room ID available, treatment timer not saved to Firebase")
         }
     }
 
@@ -201,8 +226,17 @@ class AppData: ObservableObject {
         }
         
         // Clear Firebase entry
-        if let dbRef = dbRef {
-            dbRef.child("treatmentTimer").removeValue()
+        if let roomId = currentRoomId {
+            let dbRef = Database.database().reference()
+            dbRef.child("rooms/\(roomId)/treatmentTimer").removeValue { error, _ in
+                if let error = error {
+                    print("ERROR: Failed to remove treatment timer from Firebase: \(error.localizedDescription)")
+                    self.logToFile("ERROR: Failed to remove treatment timer from Firebase: \(error.localizedDescription)")
+                } else {
+                    print("Successfully removed treatment timer from Firebase")
+                    self.logToFile("Successfully removed treatment timer from Firebase")
+                }
+            }
         }
         
         // Set to nil to trigger didSet and save
@@ -236,8 +270,17 @@ class AppData: ObservableObject {
         self.treatmentTimer = newTimer
         
         // Save to Firebase
-        if let dbRef = dbRef {
-            dbRef.child("treatmentTimer").setValue(newTimer.toDictionary())
+        if let roomId = currentRoomId {
+            let dbRef = Database.database().reference()
+            dbRef.child("rooms/\(roomId)/treatmentTimer").setValue(newTimer.toDictionary()) { error, _ in
+                if let error = error {
+                    print("ERROR: Failed to update snoozed timer in Firebase: \(error.localizedDescription)")
+                    self.logToFile("ERROR: Failed to update snoozed timer in Firebase: \(error.localizedDescription)")
+                } else {
+                    print("Successfully updated snoozed timer in Firebase")
+                    self.logToFile("Successfully updated snoozed timer in Firebase")
+                }
+            }
         }
     }
 
@@ -800,19 +843,31 @@ class AppData: ObservableObject {
                 }
             }
         }
+        
+        // Updated treatment timer observation that uses proper path
         dbRef.child("treatmentTimer").observe(.value) { snapshot in
+            print("Treatment timer update from Firebase at path \(dbRef.child("treatmentTimer").description()): \(String(describing: snapshot.value))")
+            self.logToFile("Treatment timer update from Firebase at path \(dbRef.child("treatmentTimer").description()): \(String(describing: snapshot.value))")
+            
             if let timerDict = snapshot.value as? [String: Any],
                let timerObj = TreatmentTimer.fromDictionary(timerDict) {
+                
+                print("Parsed timer object: isActive=\(timerObj.isActive), endTime=\(timerObj.endTime)")
+                self.logToFile("Parsed timer object: isActive=\(timerObj.isActive), endTime=\(timerObj.endTime)")
                 
                 // Only update if the timer is still active and has not expired
                 if timerObj.isActive && timerObj.endTime > Date() {
                     DispatchQueue.main.async {
                         self.treatmentTimer = timerObj
+                        print("Updated local timer from Firebase")
+                        self.logToFile("Updated local timer from Firebase")
                     }
                 } else {
                     // Timer is inactive or expired, clear it
                     DispatchQueue.main.async {
                         self.treatmentTimer = nil
+                        print("Cleared local timer (inactive or expired)")
+                        self.logToFile("Cleared local timer (inactive or expired)")
                     }
                 }
             } else {
@@ -820,6 +875,8 @@ class AppData: ObservableObject {
                 DispatchQueue.main.async {
                     if self.treatmentTimer != nil {
                         self.treatmentTimer = nil
+                        print("Cleared local timer (no timer in Firebase)")
+                        self.logToFile("Cleared local timer (no timer in Firebase)")
                     }
                 }
             }
